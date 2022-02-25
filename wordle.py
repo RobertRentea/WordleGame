@@ -1,5 +1,6 @@
 import os
 import random
+import numpy as np
 
 WORDLE_DATA_DIR = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
@@ -17,52 +18,74 @@ class Pattern:
         1 - the letter is in the word, but on a different location (yellow)
         2 - the letter is in the correct location (green)
     '''
-    MISS = '⬛'
-    MISPLACED = '🟨'
-    EXACT = '🟩'
+    MISS = 0
+    MISSPLACED = 1
+    EXACT = 2
 
-    def __init__(self, word: str, guessed_word: str) -> None:
-        guessed_word = list(guessed_word)
-        word = list(word)
-        self._pattern = [-1] * 5
-        for i, letter in enumerate(guessed_word):
-            if letter == word[i]:
-                self._pattern[i] = 2
-                word[i] = '_'
-            elif letter not in word:
-                self._pattern[i] = 0
+    DEFAULT_LENGTH = 5
 
-        for i, letter in enumerate(guessed_word):
-            if self._pattern[i] != -1:
-                continue
-            if letter not in word:
-                self._pattern[i] = 0
-            else:
-                self._pattern[i] = 1
-                word[word.index(letter)] = '_'
+    TYPE_TO_CHAR = {MISS: '⬛', MISSPLACED: '🟨', EXACT: '🟩'}
+
+    def __init__(self, answer: str, guess: str, pattern: list = None) -> None:
+        if pattern:
+            self._pattern = pattern
+        else:
+            if answer is None or guess is None:
+                return
+            n_letters = len(answer)
+            answer = list(answer)
+            self._pattern = [Pattern.MISS] * n_letters
+
+            # Green pass
+            for i in range(n_letters):
+                if guess[i] == answer[i]:
+                    self._pattern[i] = Pattern.EXACT
+                    answer[i] = '_'  # Marking the letter from answer as taken care of
+            
+            # Yellow pass
+            for i in range(n_letters):
+                if answer[i] != '_' and guess[i] in answer:
+                    pos = answer.index(guess[i])
+                    self._pattern[i] = Pattern.MISSPLACED
+                    answer[pos] = '_'  # Same as above
 
     @property    
     def pattern(self):
         return self._pattern
+
+    @staticmethod
+    def from_int(pattern_hash: int):
+        pattern = []
+        curr = pattern_hash
+        for _ in range(Pattern.DEFAULT_LENGTH):
+            pattern.append(curr % 3)
+            curr = curr // 3
+        return Pattern(None, None, pattern)
+
+    @staticmethod
+    def from_str(pattern: str):
+        p = Pattern(None, None)
+        p._pattern = [int(x) for x in pattern]
+        return p
     
     def __str__(self) -> str:
         pattern = ''
         for type in self._pattern:
-            if type == 0:
-                pattern += self.MISS
-            elif type == 1:
-                pattern += self.MISPLACED
-            elif type == 2:
-                pattern += self.EXACT
+            pattern += Pattern.TYPE_TO_CHAR[type]
         return pattern
     
     def __eq__(self, __o: object) -> bool:
         if not isinstance(__o, Pattern):
             return False
-        return __o.pattern == self.pattern
+        return __o._pattern == self._pattern
+
+    def __ne__(self, __o: object) -> bool:
+        return not self.__eq__(__o)
 
     def __hash__(self) -> int:
-        return hash(''.join([str(type) for type in self._pattern]))
+        a = np.array(self._pattern)
+        b = (3**np.arange(len(self._pattern))).astype(np.uint8)
+        return int(np.dot(a, b))
 
 class WordleGame:
 
@@ -72,7 +95,7 @@ class WordleGame:
         with open(ALLOWED_WORDS_FILE) as allowed_words_file:
             self.allowed_words = allowed_words_file.read().split('\n')
 
-        self.word = random.choice(self.possible_words) if word is None else word
+        self.answer = random.choice(self.possible_words) if word is None else word
         self.guesses = []
         self.won = False
         self.show_error_message = False
@@ -84,24 +107,24 @@ class WordleGame:
             self.draw()
             self.show_error_message = False
             return None
-        if word == self.word:
+        if word == self.answer:
             self.won = True
         self.guesses.append(word)
         self.draw()
 
-        return Pattern(self.word, word)
+        return Pattern(self.answer, word)
 
     def finished(self):
         return len(self.guesses) == 6 or self.won
 
     def draw(self):
         clear()
-        print(f'Word: {self.word}')
+        print(f'Word: {self.answer}')
         print(f'Guesses: {self.guesses}')
 
         word_rows = []
         for guessed_word in self.guesses:
-            pattern = Pattern(self.word, guessed_word)
+            pattern = Pattern(self.answer, guessed_word)
             word_rows.append(str(pattern))
         word_rows.extend([''] * (6 - len(self.guesses)))
         for row in word_rows:

@@ -10,6 +10,8 @@ if __name__ == "__main__":
                         help='Specify the word used in the game.')
     parser.add_argument('-n', '--naive', action='store_true',
                         help='Use the naive solver the guess the word.')
+    parser.add_argument('-i', '--interactive', action='store_true',
+                        help='Interactive mod to help solve public games.')
     args = parser.parse_args(sys.argv[1:])
     word = args.word if args.word else None
 
@@ -23,5 +25,10 @@ if __name__ == "__main__":
             print()
     else:
         if args.naive:
-            solver = NaiveSolver(word)
-            solver.play()
+            if args.interactive:
+                solver = NaiveSolver(None)
+                solver.interactive()
+            else:
+                game = WordleGame(word)
+                solver = NaiveSolver(game)
+                solver.play()
